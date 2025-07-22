@@ -13,7 +13,8 @@ import sys
 import subprocess
 import re
 from tqdm import tqdm
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -33,8 +34,10 @@ if not TARGET_DIRECTORY:
 DONE_DIRECTORY     = os.path.join(TARGET_DIRECTORY, "done")
 LOG_DIRECTORY      = os.path.join(TARGET_DIRECTORY, "logs")
 LOG_FILE_PATH      = os.path.join(LOG_DIRECTORY, "recovered_log.txt")
+UNMATCHED_JSON_DIRECTORY = os.path.join(TARGET_DIRECTORY, "unmatched_json")
 
 os.makedirs(DONE_DIRECTORY, exist_ok=True)
+os.makedirs(UNMATCHED_JSON_DIRECTORY, exist_ok=True)
 os.makedirs(LOG_DIRECTORY, exist_ok=True)
 # Truncate the log file
 with open(LOG_FILE_PATH, "w", encoding="utf-8"):
@@ -170,7 +173,6 @@ def main():
                 if stripped_ani in os.path.basename(candidate).lower()
              ), None)
 
-
         if not matched_json_path or not os.path.isfile(matched_json_path):
             log_message(f"❌ No matching JSON for {media_file_path}")
             continue
@@ -189,8 +191,8 @@ def main():
             log_message(f"⚠️ Invalid timestamp in JSON: {matched_json_path}")
             continue
 
-        # 4) Inject EXIF metadata
-        exif_datetime = datetime.utcfromtimestamp(int(timestamp)).strftime("%Y:%m:%d %H:%M:%S")
+        # Use timezone-aware conversion instead of deprecated utcfromtimestamp
+        exif_datetime = datetime.fromtimestamp(int(timestamp), tz=timezone.utc).strftime("%Y:%m:%d %H:%M:%S")
         subprocess.run([
             "exiftool", "-overwrite_original", "-q", "-m",
             f"-EXIF:CreateDate={exif_datetime}",
@@ -205,6 +207,13 @@ def main():
     for json_path in sorted(used_json_file_paths):
         destination_path = os.path.join(DONE_DIRECTORY, os.path.basename(json_path))
         os.replace(json_path, destination_path)
+
+    # Move any JSON files that were never matched into the unmatched_json folder
+    all_json_paths = set(json_file_paths)
+    unmatched_json_paths = all_json_paths - used_json_file_paths
+    for json_path in sorted(unmatched_json_paths):
+        dest = os.path.join(UNMATCHED_JSON_DIRECTORY, os.path.basename(json_path))
+        os.replace(json_path, dest)
 
     print("\n✅ Recovery complete.", file=sys.stderr)
     print(f"📝 Detailed log: {LOG_FILE_PATH}")

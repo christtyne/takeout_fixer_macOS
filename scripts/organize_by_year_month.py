@@ -18,8 +18,8 @@ import os
 import sys
 import re
 import calendar
-import shutil
 from pathlib import Path
+from shutil import move
 from tqdm import tqdm
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -33,15 +33,24 @@ YEAR_MONTH_PATTERN = re.compile(r"(20\d{2})[-_]?([01]\d)")
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-TARGET_DIRECTORY = os.getenv("TARGET_DIR") or (sys.argv[1] if len(sys.argv) > 1 else None)
-OUTPUT_DIRECTORY = os.getenv("OUTPUT_DIR") or (sys.argv[2] if len(sys.argv) > 2 else TARGET_DIRECTORY)
-
-if not TARGET_DIRECTORY or not OUTPUT_DIRECTORY:
-    print(
-        "❌ Error: TARGET_DIRECTORY and OUTPUT_DIRECTORY must be set ",
-        file=sys.stderr
-    )
+# Determine TARGET_DIRECTORY as a Path
+target_env = os.getenv("TARGET_DIR")
+if target_env:
+    TARGET_DIRECTORY = Path(target_env)
+elif len(sys.argv) > 1:
+    TARGET_DIRECTORY = Path(sys.argv[1])
+else:
+    print("❌ Error: TARGET_DIR must be set (env or first arg).", file=sys.stderr)
     sys.exit(1)
+
+# Determine OUTPUT_DIRECTORY as a Path (defaults to TARGET_DIRECTORY)
+output_env = os.getenv("OUTPUT_DIR")
+if output_env:
+    OUTPUT_DIRECTORY = Path(output_env)
+elif len(sys.argv) > 2:
+    OUTPUT_DIRECTORY = Path(sys.argv[2])
+else:
+    OUTPUT_DIRECTORY = TARGET_DIRECTORY
 
 # Ask the user how to structure folders
 print("📁 How do you want to organize your files?")
@@ -71,7 +80,6 @@ def main() -> None:
         if path.is_file()
         and path.name.lower() not in IGNORE_FILENAMES
         and path.suffix.lower() in MEDIA_EXTENSIONS
-        and not path.is_relative_to(OUTPUT_DIRECTORY)
     ]
 
     if not media_files:
@@ -105,7 +113,8 @@ def main() -> None:
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            shutil.move(str(media_file), str(dest_dir))
+            destination = dest_dir / media_file.name
+            move(str(media_file), str(destination))
         except Exception as error:
             log_error(f"❌ Failed to move {media_file.name}: {error}")
 

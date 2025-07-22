@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import os
-import shutil            # ← needed for shutil.which()
+import shutil            
 import subprocess 
 import sys
 import re
@@ -82,11 +82,9 @@ def main():
     # 2) Pick destination once
     output_folder = pick_folder("💾 Select where to save organized files")
     os.environ["OUTPUT_DIR"] = output_folder
-    #os.environ["TARGET_DIR"] = '/Users/kamil1/photos_jhon'
-    #os.environ["OUTPUT_DIR"] = '/Users/kamil1/photos_jhon/Final'
 
     # 3) JSON recovery
-    #run_script("recover_from_json.py")
+    run_script("recover_from_json.py")
 
     # 4) EXIF-based processing
     run_script("process_photos.py")

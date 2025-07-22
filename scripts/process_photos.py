@@ -6,6 +6,8 @@ Renames media files under TARGET_DIR to a timestamp-based filename using
 the EXIF CreateDate (including subseconds) or, if missing, by parsing the
 original filename. Matched files are renamed in place; unmatched files are
 moved to an “unmatched” folder. Duplicate target names get “(1)”, “(2)”, etc.
+
+Logs are written to TARGET_DIR/logs/process_errors.txt
 """
 
 import os
@@ -19,23 +21,22 @@ from pathlib import Path
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 # Read TARGET_DIR from env or first arg
-TARGET_DIR = os.getenv("TARGET_DIR") or (sys.argv[1] if len(sys.argv) > 1 else None)
-OUTPUT_DIR = os.getenv("OUTPUT_DIR") or (sys.argv[2] if len(sys.argv) > 2 else TARGET_DIR)
+TARGET_DIR = Path(os.getenv("TARGET_DIR") or (sys.argv[1] if len(sys.argv) > 1 else ""))
 
-if not TARGET_DIR:
-    print("❌ Error: TARGET_DIR must be set (env or first arg).", file=sys.stderr)
+if not TARGET_DIR or not TARGET_DIR.exists():
+    print("❌ Error: TARGET_DIR must be set (env or first arg) and exist.", file=sys.stderr)
     sys.exit(1)
 
 # Paths
-UNMATCHED_DIR    = os.path.join(TARGET_DIR, "unmatched")
-LOG_DIR          = os.path.join(TARGET_DIR, "logs")
-MATCHED_LOG_PATH = os.path.join(LOG_DIR, "matched.txt")
-UNMATCHED_LOG_PATH = os.path.join(LOG_DIR, "unmatched.txt")
-ERROR_LOG_PATH    = os.path.join(LOG_DIR, "errors.txt")
+UNMATCHED_DIR      = TARGET_DIR / "unmatched"
+LOG_DIR            = TARGET_DIR / "logs"
+MATCHED_LOG_PATH   = LOG_DIR / "matched.txt"
+UNMATCHED_LOG_PATH = LOG_DIR / "unmatched.txt"
+ERROR_LOG_PATH     = LOG_DIR / "process_errors.txt"
 
 # Prepare directories
-os.makedirs(UNMATCHED_DIR, exist_ok=True)
-os.makedirs(LOG_DIR,        exist_ok=True)
+UNMATCHED_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Truncate logs
 for path in (MATCHED_LOG_PATH, UNMATCHED_LOG_PATH, ERROR_LOG_PATH):
@@ -64,22 +65,23 @@ def log_error(message: str):
     with open(ERROR_LOG_PATH, "a", encoding="utf-8") as f:
         f.write(message + "\n")
 
-def list_all_media_files():
+def list_media_file_paths():
     """Return list of all media file paths under TARGET_DIR (excluding 'unmatched' and 'logs')."""
     paths = []
     for root, dirs, files in os.walk(TARGET_DIR):
+        root_path = Path(root)
         # Skip our own output folders
-        if os.path.commonpath([root, UNMATCHED_DIR]) == UNMATCHED_DIR:
+        if UNMATCHED_DIR in root_path.parents or root_path == UNMATCHED_DIR:
             continue
-        if os.path.commonpath([root, LOG_DIR]) == LOG_DIR:
+        if LOG_DIR in root_path.parents or root_path == LOG_DIR:
             continue
         for filename in files:
-            ext = os.path.splitext(filename)[1].lower()
+            ext = Path(filename).suffix.lower()
             if ext in MEDIA_EXTENSIONS:
-                paths.append(os.path.join(root, filename))
+                paths.append(root_path / filename)
     return paths
 
-def extract_exif_create_date(media_path: str):
+def extract_exif_create_date(media_file_path: str):
     """
     Reads the EXIF CreateDate and SubSecTimeOriginal directly from the media file.
     Returns a tuple (create_date_str, subseconds) or (None, None) on failure.
@@ -92,26 +94,26 @@ def extract_exif_create_date(media_path: str):
             "exiftool", "-s3",
             "-CreateDate",       # tag for the main timestamp
             "-SubSecTimeOriginal",  # tag for sub-seconds
-            media_path
+            str(media_file_path)
         ], stderr=subprocess.DEVNULL).decode("utf-8", "ignore").splitlines()
         
         if not output:
             return None, None
         
-        create_date = output[0].strip()
-        subsec      = output[1].strip() if len(output) > 1 else ""
-        return create_date, subsec
+        exif_create_date = output[0].strip()
+        sub_second      = output[1].strip() if len(output) > 1 else ""
+        return exif_create_date, sub_second
 
     except Exception as e:
-        log_error(f"❌ EXIF read failed for {media_path}: {e}")
+        log_error(f"❌ EXIF read failed for {media_file_path}: {e}")
         return None, None
 
-def parse_date_from_filename(name: str):
+def parse_date_from_filename(filename: str):
     """
-    Parse YYYY MM DD and optional HHMMSS from name.
+    Parse YYYY MM DD and optional HHMMSS from filename.
     Returns (year,month,day,hh,mm,ss) or None.
     """
-    m = FILENAME_DATE_REGEX.match(name)
+    m = FILENAME_DATE_REGEX.match(filename)
     if not m:
         return None
     year, month, day, timepart = m.groups()
@@ -121,78 +123,77 @@ def parse_date_from_filename(name: str):
         hh, mm, ss = "00", "00", "00"
     return year, month, day, hh, mm, ss
     
-def make_unique_path(directory: Path, base_name: str, extension: str, original_path: Path = None) -> Path:
+def make_unique_path(destination_directory: Path, base_name: str, extension: str, original_file_path: Path = None) -> Path:
     """
-    If dest_dir/base_name+extension exists *and* is not the same as original_path,
+    If dest_dir/base_name+extension exists *and* is not the same as original_file_path,
     append (1), (2), ... before the extension. Otherwise return the straight path.
     """
-    candidate = directory / f"{base_name}{extension}"
+    candidate = destination_directory / f"{base_name}{extension}"
     # if it doesn't exist, or it *is* our original file, use it
-    if not candidate.exists() or (original_path and candidate.samefile(original_path)):
+    if not candidate.exists() or (original_file_path and candidate.samefile(original_file_path)):
         return candidate
 
     index = 1
     while True:
-        candidate = directory / f"{base_name}({index}){extension}"
+        candidate = destination_directory / f"{base_name}({index}){extension}"
         if not candidate.exists():
             return candidate
         index += 1
 
 def main():
-    media_paths = list_all_media_files()
-    if not media_paths:
+    media_file_paths = list_media_file_paths()
+    if not media_file_paths:
         print(f"ℹ️  No media files found under {TARGET_DIR}.")
         return
 
-    print(f"📅 Processing {len(media_paths)} media file(s)")
+    print(f"📅 Processing {len(media_file_paths)} media file(s)")
 
-    for media_path in tqdm(media_paths, desc="📅 Inferring dates", unit="file", file=sys.stderr):
-        filename        = os.path.basename(media_path)
-        name_root, ext  = os.path.splitext(filename)
-        ext             = ext.lower()
+    for media_file_path in tqdm(media_file_paths, desc="📅 Inferring dates", unit="file", file=sys.stderr):
+        filename        = media_file_path.name
+        file_stem, file_extension  = media_file_path.stem, media_file_path.suffix.lower()
 
         # 1) Try EXIF CreateDate
-        create_date, subseconds = extract_exif_create_date(media_path)
-        new_base = None
+        exif_create_date, sub_second = extract_exif_create_date(media_file_path)
+        new_base_name = None
 
-        if create_date:
+        if exif_create_date:
             try:
-                date_part, time_part = create_date.split(" ")
-                date_fmt = date_part.replace(":", "-")
-                time_fmt = time_part.replace(":", "-")
-                new_base = f"{date_fmt}_{time_fmt}"
-                if subseconds:
+                date_part, time_part = exif_create_date.split(" ")
+                date_string = date_part.replace(":", "-")
+                time_string = time_part.replace(":", "-")
+                new_base_name = f"{date_string}_{time_string}"
+                if sub_second:
                     # take only the first 2 digits of the sub-second value
-                    ms2 = (subseconds[:2]).ljust(2, "0")
-                    new_base += f"-{ms2}"
+                    sub_second_two_digits = (sub_second[:2]).ljust(2, "0")
+                    new_base_name += f"-{sub_second_two_digits}"
             except Exception as e:
                 log_error(f"❌ EXIF parse error for {filename}: {e}")
-                create_date = None  # fallback to filename
+                exif_create_date = None  # fallback to filename
 
         # 2) Fallback: parse filename
-        if not new_base:
-            parsed = parse_date_from_filename(name_root)
+        if not new_base_name:
+            parsed = parse_date_from_filename(file_stem)
             if parsed:
                 year, month, day, hh, mm, ss = parsed
-                date_fmt = f"{year}-{month}-{day}"
-                time_fmt = f"{hh}-{mm}-{ss}"
-                new_base = f"{date_fmt}_{time_fmt}"
-                subseconds = ""
+                date_string = f"{year}-{month}-{day}"
+                time_string = f"{hh}-{mm}-{ss}"
+                new_base_name = f"{date_string}_{time_string}"
+                sub_second = ""
             else:
                 # Unmatched: move to UNMATCHED_DIR
-                dest = make_unique_path(UNMATCHED_DIR, name_root, ext)
+                new_file_path = make_unique_path(UNMATCHED_DIR, file_stem, file_extension)
                 try:
-                    os.rename(media_path, dest)
-                    log_unmatched(f"⚠️ {filename} → {os.path.basename(dest)}")
+                    media_file_path.rename(new_file_path)
+                    log_unmatched(f"⚠️ {filename} → {new_file_path.name}")
                 except Exception as e:
                     log_error(f"❌ Failed to move unmatched {filename}: {e}")
                 continue
 
         # 3) Rename in place (keep directory)
-        parent_dir = Path(media_path).parent
-        new_path = make_unique_path(parent_dir, new_base, ext, original_path=Path(media_path))
-        if new_path != Path(media_path):
-           os.rename(media_path, new_path)
+        parent_dir = media_file_path.parent
+        new_path = make_unique_path(parent_dir, new_base_name, file_extension, original_file_path=media_file_path)
+        if new_path != media_file_path:
+           media_file_path.rename(new_path)
            log_matched(f"✅ Renamed: {filename} → {new_path.name}")
 
     print(f"\n🎉 Done. Renamed files in place; unmatched moved to: {UNMATCHED_DIR}")
