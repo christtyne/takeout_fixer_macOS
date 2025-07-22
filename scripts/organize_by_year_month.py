@@ -33,19 +33,12 @@ YEAR_MONTH_PATTERN = re.compile(r"(20\d{2})[-_]?([01]\d)")
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-TARGET_DIRECTORY = Path(
-    os.getenv("TARGET_DIR") or
-    (sys.argv[1] if len(sys.argv) > 1 else "")
-)
-OUTPUT_DIRECTORY = Path(
-    os.getenv("OUTPUT_DIR") or
-    (sys.argv[2] if len(sys.argv) > 2 else "")
-)
+TARGET_DIRECTORY = os.getenv("TARGET_DIR") or (sys.argv[1] if len(sys.argv) > 1 else None)
+OUTPUT_DIRECTORY = os.getenv("OUTPUT_DIR") or (sys.argv[2] if len(sys.argv) > 2 else TARGET_DIRECTORY)
 
 if not TARGET_DIRECTORY or not OUTPUT_DIRECTORY:
     print(
-        "❌ Error: TARGET_DIR and OUTPUT_DIR must be set "
-        "(via environment or as arguments)",
+        "❌ Error: TARGET_DIRECTORY and OUTPUT_DIRECTORY must be set ",
         file=sys.stderr
     )
     sys.exit(1)
@@ -68,26 +61,6 @@ def log_error(message: str) -> None:
     """Append an error message to the log file."""
     with LOG_FILE_PATH.open("a", encoding="utf-8") as f:
         f.write(message + "\n")
-
-# ─── Utility Functions ────────────────────────────────────────────────────────
-
-def make_unique_path(dest_dir: Path, base_name: str, extension: str, original_path: Path = None) -> Path:
-    """
-    Return dest_dir/base_name+extension if it doesn't exist or is the same
-    as original_path; otherwise append (1), (2), ... until unique.
-    """
-    candidate = dest_dir / f"{base_name}{extension}"
-    if not candidate.exists() or (
-        original_path and candidate.samefile(original_path)
-    ):
-        return candidate
-
-    index = 1
-    while True:
-        numbered = dest_dir / f"{base_name}({index}){extension}"
-        if not numbered.exists():
-            return numbered
-        index += 1
 
 # ─── Main Processing ─────────────────────────────────────────────────────────
 
@@ -131,14 +104,8 @@ def main() -> None:
 
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        new_path = make_unique_path(
-            dest_dir,
-            stem,
-            extension,
-            original_path=media_file
-        )
         try:
-            shutil.move(str(media_file), str(new_path))
+            shutil.move(str(media_file), str(dest_dir))
         except Exception as error:
             log_error(f"❌ Failed to move {media_file.name}: {error}")
 
