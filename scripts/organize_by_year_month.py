@@ -58,6 +58,10 @@ print("  [1] Year only (YYYY)")
 print("  [2] Year and month name (YYYY/month)")
 _choice = input("Select 1 or 2: ").strip()
 ORGANIZE_BY_MONTH = (_choice == "2")
+if _choice == 1:
+    structure = "Year"
+else:
+    structure = "Year and month"
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 
@@ -67,7 +71,7 @@ LOG_FILE_PATH = LOG_DIRECTORY / "organize_log.txt"
 LOG_FILE_PATH.write_text("")  # truncate existing
 
 def log_error(message: str) -> None:
-    """Append an error message to the log file."""
+    #Append an error message to the log file
     with LOG_FILE_PATH.open("a", encoding="utf-8") as f:
         f.write(message + "\n")
 
@@ -83,15 +87,15 @@ def main() -> None:
     ]
 
     if not media_files:
-        print(f"ℹ️  No media files found under {TARGET_DIRECTORY}.")
+        print(f"\nℹ️  No media files found under {TARGET_DIRECTORY}.")
         return
 
-    print(f"🔍 Found {len(media_files)} media files under {TARGET_DIRECTORY}.\n")
+    print(f"\n🔍 Found {len(media_files)} media files under {TARGET_DIRECTORY}.")
 
     # Process each file with a live progress bar
     for media_file in tqdm(
         media_files,
-        desc=f"📂 Organizing by {_choice}",
+        desc=f"📂 Organizing by {structure}",
         unit="file",
         file=sys.stderr
     ):
@@ -118,8 +122,8 @@ def main() -> None:
         except Exception as error:
             log_error(f"❌ Failed to move {media_file.name}: {error}")
 
-    print(f"\n✅ Files organized into: {OUTPUT_DIRECTORY}")
-    print(f"📝 Errors logged to: {LOG_FILE_PATH}")
+    print(f"✅ Files organized into: {OUTPUT_DIRECTORY}")
+    print(f"📝 Errors logged to: {LOG_FILE_PATH}\n\n")
 
 if __name__ == "__main__":
     main()

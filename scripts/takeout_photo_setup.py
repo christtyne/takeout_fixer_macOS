@@ -3,10 +3,6 @@ import os
 import shutil            
 import subprocess 
 import sys
-import re
-import calendar
-from pathlib import Path
-from tqdm import tqdm
 
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
@@ -55,7 +51,7 @@ def run_script(script_name, use_shell=False):
     else:
         # shell scripts or others
         if not os.access(script_path, os.X_OK):
-            print(f"⚠️ {script_name} is not executable, skipping")
+            print(f"\n⚠️ {script_name} is not executable, skipping")
             return
         if use_shell:
             subprocess.run(script_path, shell=True, check=True)
@@ -68,7 +64,7 @@ def main():
     check_deps()
     
     # 1) Optional archive extraction
-    if ask_yes_no("📦 Extract .tar/.tgz files?"):
+    if ask_yes_no("\n📦 Do you want to extract .tar/.tgz files?\n"):
         archive_folder = pick_folder("📦 Select folder containing your .tar/.tgz files")
         os.environ["TAR_SOURCE"]  = archive_folder
         takeout_folder = pick_folder("📂 Select the folder where to extract the Takeout files")
@@ -90,15 +86,15 @@ def main():
     run_script("process_photos.py")
 
     # 6) Optional folder organization
-    if ask_yes_no("📁 Organize into year/ or year/month/ subfolders?"):
+    if ask_yes_no("\n📁 Organize into year/ or year/month/ subfolders?\n"):
         run_script("organize_by_year_month.py")
     
 
     # 7) Optional cleanup of empty folders
-    if ask_yes_no("🧹 Remove empty folders under the Takeout folder?"):
+    if ask_yes_no("\n🧹 Remove empty folders under the Takeout folder?\n"):
         run_script("clean_empty_folders.py")
 
-    print(f"\n🎉 All done! Your organized photos are in:\n   {output_folder}")
+    print(f"\n🎉 All done! Your organized files are in:\n📂 {output_folder}")
 
 if __name__ == "__main__":
     main()

@@ -215,7 +215,7 @@ def main():
         dest = os.path.join(UNMATCHED_JSON_DIRECTORY, os.path.basename(json_path))
         os.replace(json_path, dest)
 
-    print("\n✅ Recovery complete.", file=sys.stderr)
+    print("✅ Recovery complete.", file=sys.stderr)
     print(f"📝 Detailed log: {LOG_FILE_PATH}")
 
 if __name__ == "__main__":

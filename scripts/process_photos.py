@@ -196,10 +196,10 @@ def main():
            media_file_path.rename(new_path)
            log_matched(f"✅ Renamed: {filename} → {new_path.name}")
 
-    print(f"\n🎉 Done. Renamed files in place; unmatched moved to: {UNMATCHED_DIR}")
+    print(f"✅ Renamed files in place; unmatched moved to: {UNMATCHED_DIR}")
     print(f"📝 Matched log:   {MATCHED_LOG_PATH}")
     print(f"📝 Unmatched log: {UNMATCHED_LOG_PATH}")
-    print(f"📝 Errors log:    {ERROR_LOG_PATH}")
+    print(f"📝 Errors log:    {ERROR_LOG_PATH}\n\n")
 
 if __name__ == "__main__":
     main()

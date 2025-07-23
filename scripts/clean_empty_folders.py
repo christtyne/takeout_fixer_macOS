@@ -41,8 +41,8 @@ def main():
         sys.exit(0)
 
     # 3) Prompt user
-    print(f"\n\n🧹 Found {count} empty folder{'s' if count!=1 else ''} under: {target}")
-    confirm = input("Do you want to delete them? [y/n] ").strip().lower()
+    print(f"🧹 Found {count} empty folder{'s' if count!=1 else ''} under: {target}")
+    confirm = input("Do you want to delete them?\n[y/n] ").strip().lower()
 
     # 4) Delete if confirmed
     if confirm.startswith('y'):
@@ -50,16 +50,18 @@ def main():
             # remove .DS_Store if present
             ds_store = directory / ".DS_Store"
             try:
+                # Remove .DS_Store if present
                 if ds_store.exists():
                     ds_store.unlink()
-                    directory.rmdir()
-                    print(f"🗑 Removed: {directory}")
+                # Attempt to remove the directory itself
+                directory.rmdir()
+                print(f"🗑 Removed: {directory}")
             except Exception:
-                # skip those that cant be removed
+                # skip those that can't be removed
                 pass
-        print("✅ All empty folders deleted.")
+        print("✅ All empty folders deleted.\n\n")
     else:
-        print("❌ Cleanup canceled. No folders were deleted.")
+        print("❌ Cleanup canceled. No folders were deleted.\n\n")
 
 if __name__ == "__main__":
     main()
