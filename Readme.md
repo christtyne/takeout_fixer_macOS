@@ -1,4 +1,4 @@
-# 🎞️ Google Takeout Photo Organizer
+# 🎞️ Google Takeout Photo Organizer MacOS
 
 A **friendly**, **easy-to-use** set of scripts to **process**, **inject metadata**, **rename**, and **organize** your Google Takeout photos & videos—no programming required!
 
